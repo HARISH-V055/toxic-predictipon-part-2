@@ -2,8 +2,8 @@
 Main Entry Point for EQ-KA-GCN Scientific Project Pipeline
 
 Coordinates initialization, dataset loading, validation, preprocessing, statistics generation,
-graph dataset construction, stratified splitting, DataLoader construction, and Baseline GCN
-model training with checkpoint saving, performance metric logging, and history export.
+graph dataset construction, stratified splitting, DataLoader construction, model training,
+and baseline GCN model evaluation with automated text/JSON reports and publication-quality figures.
 Emits standard IEEE publication project metadata.
 """
 
@@ -34,6 +34,16 @@ from training import (
     History,
     Trainer,
 )
+from evaluation import (
+    Evaluator,
+    plot_loss_curve,
+    plot_accuracy_curve,
+    plot_roc_curve,
+    plot_precision_recall_curve,
+    plot_confusion_matrix,
+    generate_json_report,
+    generate_text_report,
+)
 from utils import set_seed, get_device, setup_logger
 
 
@@ -63,6 +73,7 @@ def run_pipeline() -> None:
       Phase 4: Full Dataset Graph Compilation, Serialization, & Statistics
       Phase 5: Stratified Train/Val/Test Dataset Splitting & DataLoader Generation
       Phase 7: Baseline GCN Model Training Loop & Metrics Logging
+      Phase 8: Baseline GCN Model Test Set Evaluation, Plots, & Reports
     """
     # ─── PHASE 1: INITIALIZATION ─────────────────────────────────────────────
     # 1. Load configuration
@@ -366,6 +377,78 @@ def run_pipeline() -> None:
     logger.info(f"Best Epoch:           {best_epoch}")
     logger.info(f"Training Time:        {training_time:.2f} seconds")
     logger.info("==================================================================")
+
+    # ─── PHASE 8: MODEL EVALUATION ───────────────────────────────────────────
+    logger.info("Starting Phase 8: Model Evaluation on Held-Out Test Set...")
+
+    # 1. Instantiate Evaluator
+    evaluator = Evaluator(model=model, device=device)
+
+    # 2. Load the best checkpoint weights saved during early stopping
+    evaluator.load_model(str(best_model_path))
+
+    # 3. Evaluate the model on test DataLoader
+    test_metrics, y_true, y_pred, y_prob = evaluator.evaluate(
+        loader=test_loader,
+        threshold=config.evaluation.threshold,
+    )
+
+    # 4. Setup output locations
+    outputs_figures_dir = config.paths.outputs_dir / "figures"
+    outputs_figures_dir.mkdir(parents=True, exist_ok=True)
+
+    json_report_path = config.paths.outputs_dir / "evaluation_report.json"
+    text_report_path = config.paths.outputs_dir / "classification_report.txt"
+
+    loss_curve_path = outputs_figures_dir / "loss_curve.png"
+    accuracy_curve_path = outputs_figures_dir / "accuracy_curve.png"
+    roc_curve_path = outputs_figures_dir / "roc_curve.png"
+    pr_curve_path = outputs_figures_dir / "precision_recall_curve.png"
+    cm_path = outputs_figures_dir / "confusion_matrix.png"
+
+    # 5. Save reports
+    if config.evaluation.save_reports:
+        generate_json_report(
+            metrics=test_metrics,
+            save_path=str(json_report_path),
+            model_name=config.model.name,
+            dataset_name="Tox21",
+        )
+        generate_text_report(
+            metrics=test_metrics,
+            save_path=str(text_report_path),
+        )
+
+    # 6. Save plots
+    if config.evaluation.save_plots:
+        plot_loss_curve(str(history_csv_path), str(loss_curve_path))
+        plot_accuracy_curve(str(history_csv_path), str(accuracy_curve_path))
+        plot_roc_curve(y_true, y_prob, str(roc_curve_path))
+        plot_precision_recall_curve(y_true, y_prob, str(pr_curve_path))
+        plot_confusion_matrix(test_metrics["confusion_matrix"], str(cm_path))
+
+    # 7. Print summary console statement exactly as required
+    print("=================================================")
+    print("BASELINE GCN EVALUATION")
+    print("=================================================")
+    print(f"Accuracy            : {test_metrics['accuracy'] * 100:.2f} %")
+    print(f"Precision           : {test_metrics['precision'] * 100:.2f} %")
+    print(f"Recall              : {test_metrics['recall'] * 100:.2f} %")
+    print(f"F1 Score            : {test_metrics['f1_score'] * 100:.2f} %")
+    print(f"ROC-AUC             : {test_metrics['roc_auc']:.4f}")
+    print(f"Balanced Accuracy   : {test_metrics['balanced_accuracy'] * 100:.2f} %")
+    print(f"MCC                 : {test_metrics['mcc']:.4f}")
+    print(f"Inference Time      : {test_metrics['inference_time_per_sample_ms']:.2f} ms/sample")
+    print("=================================================")
+    print("Outputs Saved")
+    print("evaluation_report.json")
+    print("classification_report.txt")
+    print("roc_curve.png")
+    print("confusion_matrix.png")
+    print("loss_curve.png")
+    print("accuracy_curve.png")
+    print("precision_recall_curve.png")
+    print("=================================================")
 
 
 if __name__ == "__main__":

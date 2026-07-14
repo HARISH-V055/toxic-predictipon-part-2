@@ -87,6 +87,14 @@ class DataConfig:
 
 
 @dataclass
+class EvaluationConfig:
+    """Configuration for model evaluation."""
+    threshold: float = 0.5
+    save_plots: bool = True
+    save_reports: bool = True
+
+
+@dataclass
 class Config:
     """Master configuration class."""
     paths: PathConfig = field(default_factory=PathConfig)
@@ -94,10 +102,12 @@ class Config:
     model: ModelConfig = field(default_factory=ModelConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
     quantization: QuantizationConfig = field(default_factory=QuantizationConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     device: str = "auto"  # options: 'auto', 'cuda', 'cpu'
 
 
 def get_config() -> Config:
     """Factory function to retrieve the default configuration."""
     return Config()
+
 

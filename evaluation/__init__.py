@@ -1,4 +1,26 @@
 """
 Evaluation module for EQ-KA-GCN.
-Responsible for validation scoring, metrics calculation (ROC-AUC, PR-AUC), and reporting.
+Tracks validation runs, computes performance metrics (ROC-AUC, Precision, Recall, F1),
+handles plot generation, and writes test summaries to disk.
 """
+
+from evaluation.evaluator import Evaluator
+from evaluation.plots import (
+    plot_accuracy_curve,
+    plot_confusion_matrix,
+    plot_loss_curve,
+    plot_precision_recall_curve,
+    plot_roc_curve,
+)
+from evaluation.report import generate_json_report, generate_text_report
+
+__all__ = [
+    "Evaluator",
+    "plot_loss_curve",
+    "plot_accuracy_curve",
+    "plot_roc_curve",
+    "plot_precision_recall_curve",
+    "plot_confusion_matrix",
+    "generate_json_report",
+    "generate_text_report",
+]

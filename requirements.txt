@@ -9,3 +9,5 @@ networkx
 tqdm
 joblib
 pyyaml
+seaborn
+
