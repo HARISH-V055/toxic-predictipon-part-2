@@ -2,7 +2,8 @@
 Main Entry Point for EQ-KA-GCN Scientific Project Pipeline
 
 Coordinates initialization, dataset loading, validation, preprocessing, statistics generation,
-graph dataset construction, stratified splitting, DataLoader construction, and statistics reporting.
+graph dataset construction, stratified splitting, DataLoader construction, and Baseline GCN
+model training with checkpoint saving, performance metric logging, and history export.
 Emits standard IEEE publication project metadata.
 """
 
@@ -23,7 +24,16 @@ from graph import (
     GraphDataset,
     compute_and_log_dataset_statistics,
 )
-from training import split_graph_dataset, create_dataloaders
+from models import BaselineGCN, get_loss_criterion
+from training import (
+    split_graph_dataset,
+    create_dataloaders,
+    create_optimizer,
+    create_scheduler,
+    EarlyStopping,
+    History,
+    Trainer,
+)
 from utils import set_seed, get_device, setup_logger
 
 
@@ -52,6 +62,7 @@ def run_pipeline() -> None:
       Phase 3: Molecular Graph Construction Demonstration
       Phase 4: Full Dataset Graph Compilation, Serialization, & Statistics
       Phase 5: Stratified Train/Val/Test Dataset Splitting & DataLoader Generation
+      Phase 7: Baseline GCN Model Training Loop & Metrics Logging
     """
     # ─── PHASE 1: INITIALIZATION ─────────────────────────────────────────────
     # 1. Load configuration
@@ -89,12 +100,12 @@ def run_pipeline() -> None:
     logger.info(f"Project Name:           {config.model.name}")
     logger.info(f"Model Save Target:      {config.paths.checkpoints_dir / config.model.save_filename}")
     logger.info(f"Batch Size:             {config.training.batch_size}")
-    logger.info(f"Learning Rate:          {config.training.lr}")
+    logger.info(f"Learning Rate:          {config.training.learning_rate}")
     logger.info(f"Training Epochs:        {config.training.epochs}")
     logger.info(f"QAT Enabled:            {config.quantization.qat_enabled} ({config.quantization.bits}-bit)")
-    logger.info(f"Fourier-KAN Grid Size:  {config.model.grid_size}")
     logger.info(f"Model Hidden Dim:       {config.model.hidden_dim}")
     logger.info(f"Model Dropout:          {config.model.dropout}")
+    logger.info(f"Model Layers (GCN):     {config.model.num_gcn_layers}")
     logger.info("==================================================================")
     logger.info("Project initialized successfully. Running Phase 2: Data construction.")
 
@@ -285,7 +296,75 @@ def run_pipeline() -> None:
     log_split_statistics("Test Split", test_graphs, logger)
 
     logger.info("==================================================================")
-    logger.info("Phase 5 complete. Ready for Phase 6: GCN Model Training.")
+    logger.info("Phase 5 complete. Running Phase 7: Model Training.")
+    logger.info("==================================================================")
+
+    # ─── PHASE 7: BASELINE GCN TRAINING ──────────────────────────────────────
+    logger.info("Starting Phase 7: Baseline GCN Model Training Loop...")
+
+    # 1. Instantiate Model
+    model = BaselineGCN(
+        input_dim=config.model.input_dim,
+        hidden_dim=config.model.hidden_dim,
+        output_dim=config.model.output_dim,
+        dropout=config.model.dropout,
+    )
+    logger.info(f"Model initialized:\n{str(model)}")
+    model.to(device)
+
+    # 2. Set Up Training Utilities
+    criterion = get_loss_criterion(positive_class_weight=None)
+    optimizer = create_optimizer(
+        model=model,
+        lr=config.training.learning_rate,
+        weight_decay=config.training.weight_decay,
+    )
+    scheduler = create_scheduler(
+        optimizer=optimizer,
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+    )
+    
+    # Early Stopping setup to save best_model.pt
+    best_model_path = config.paths.checkpoints_dir / config.model.save_filename
+    early_stopping = EarlyStopping(
+        patience=config.training.early_stopping,
+        save_path=str(best_model_path),
+    )
+    
+    # History tracking setup to save history.csv
+    history = History()
+
+    # 3. Initialize Trainer
+    trainer = Trainer(
+        model=model,
+        device=device,
+        criterion=criterion,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        early_stopping=early_stopping,
+        history=history,
+    )
+
+    # 4. Fit/Train GCN
+    best_val_loss, best_epoch, training_time = trainer.fit(
+        train_loader=train_loader,
+        val_loader=val_loader,
+        epochs=config.training.epochs,
+    )
+
+    # 5. Export history logs to outputs/history.csv
+    history_csv_path = config.paths.outputs_dir / "history.csv"
+    history.export_csv(str(history_csv_path))
+
+    # 6. Print summary statement
+    logger.info("==================================================================")
+    logger.info("BASELINE GCN TRAINING RUN COMPLETE")
+    logger.info("==================================================================")
+    logger.info(f"Best Validation Loss: {best_val_loss:.6f}")
+    logger.info(f"Best Epoch:           {best_epoch}")
+    logger.info(f"Training Time:        {training_time:.2f} seconds")
     logger.info("==================================================================")
 
 

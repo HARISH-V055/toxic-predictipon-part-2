@@ -33,15 +33,15 @@ class PathConfig:
 
 @dataclass
 class ModelConfig:
-    """Hyperparameters for EQ-KA-GCN and Fourier-KAN."""
-    name: str = "EQ-KA-GCN"
+    """Hyperparameters for the baseline GCN model."""
+    name: str = "BaselineGCN"
     save_filename: str = "eq_ka_gcn_best.pt"
-    input_dim: int = 74  # standard RDKit atom features dimension
+    input_dim: int = 5  # 5 node features (atomic number, degree, formal charge, aromaticity, hydrogens)
     hidden_dim: int = 128
     output_dim: int = 1  # Binary prediction (toxic/non-toxic)
-    num_layers: int = 3
-    grid_size: int = 5  # Number of grid points for Fourier-KAN splines
-    dropout: float = 0.1
+    dropout: float = 0.3
+    num_gcn_layers: int = 2
+
 
 
 @dataclass
@@ -50,12 +50,15 @@ class TrainingConfig:
     seed: int = 42
     batch_size: int = 64
     lr: float = 0.001
+    learning_rate: float = 0.001
     weight_decay: float = 1e-4
     epochs: int = 100
     early_stopping_patience: int = 15
+    early_stopping: int = 15
     train_ratio: float = 0.8
     val_ratio: float = 0.1
     test_ratio: float = 0.1
+
 
 
 @dataclass
